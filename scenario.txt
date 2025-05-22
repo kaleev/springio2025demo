@@ -1,57 +1,60 @@
-TASK A – THE GREETING NEVER CHANGES
-Goal: make the greeting on the “/” home page change each time you reload it.
+================================================================================
+TASK – “ADD RANDOM CUSTOMER” HANGS, THEN DUPLICATES
+================================================================================
+Goal  
+The “Add Random Customer” button on the home page must add exactly **one**
+customer with a **random** name every time it is pressed.
 
-1. Run the application by using the provided run configuration.
-2. Open a browser at http://localhost:8080/ and reload the page a few times.  
-   The greeting below the header always shows the same text.
-3. Open HomeController and set a breakpoint on the line that calls  
-   greetingResolver.resolveGreeting(…).
-4. Reload the browser once more; execution should stop at the breakpoint.
-5. While the program is paused, locate **greetingResolver** in the Debugger’s
-   Variables pane. Determine which bean is actually injected.
-6. Enable the bean that produces random greetings, for instance, by activating 'demo' profile in 'applicaiton.proeprties'.
-   Then restart the application.
-7. Reload the page a few times. The greeting should now be different on each
-   reload.
-8. Stop the debugger before moving on.
+There are three independent defects to fix:
 
-===============================================================================
-TASK B – “ADD RANDOM CUSTOMER” HANGS, THEN DUPLICATES
-There are two defects to fix:  
-(1) the first click on “Add Random Customer” never returns because of a
-    transaction hang;  
-(2) after the hang is fixed, a second click fails due to a duplicate username.
+  1. The first click never returns – the request is stuck in a nested
+     transaction started in TransactionLevel5Service.
+  2. Spring wires **MockTransactionLevel4Service** instead of the real
+     DemoTransactionLevel4Service, causing an extra database call.
+  3. Property **user.random.names** resolves to *false*, so fixed names
+     are used even after the hang is gone.
 
-PART 1 – INVESTIGATE THE HANG CAUSED BY NESTED TRANSACTIONS
+Follow the steps below to verify and remove each defect.
 
-1. Start the application (if it is not already running) and click
-   “Add Random Customer” once. The browser keeps loading—the server thread
-   is stuck.
-2. Open **CustomerService** and set a breakpoint on the first line of
-   createRandomCustomer(…).
-3. Restart the application.
-4. Click “Add Random Customer” again. Execution stops at the breakpoint.
-5. In the **Debugger** tool window inspect the thread and variables.
-   Identify where the transaction was started.
-6. Press **Resume** (F9).
-   After a short moment the breakpoint is hit a **second** time.  
-   Inspect the variables again—you are now inside a new inner transaction
-   waiting for a lock already held by the outer one, which explains the hang.
-7. Navigate to the transaction source and fix the problem by
-   • removing the custom propagation setting from TransactionLevel5Service, and  
-   • deleting the redundant createRandomCustomer() call in TransactionLevel4Service.
-   Restart the application.
-8. Click “Add Random Customer” again. A random customer is added, but the
-   name is still fixed.
-9. Set a breakpoint at the first line of CustomerService.createRandomCustomer(…)
-   and click the button once more to stop there.
-10. Inspect the field **useRandomName** (note the spelling). Its value is *false*
-   even though random names are expected.
-11. Locate where the Spring property **user.random.names** is defined and find
-    out why it resolves to *false*.
-12. Change the property so that **user.random.names** resolves to *true*, then
-    restart the application.
-13. Click “Add Random Customer” again. Two random customers should now be added.
+-------------------------------------------------------------------------------
+STEP-BY-STEP
 
-===============================================================================
-YOU’RE DONE
+1.  Start the application and press **Add Random Customer** once.  
+    The browser keeps loading – reproduce the hang.
+
+2.  Set a breakpoint on the first line of  
+    `CustomerService#createRandomCustomer(…)`, restart the application, and repeat the click.
+    You should reach the breakpoint **twice**:
+        • the first hit originates from *TransactionLevel1Service* (outer transaction)
+        • the second hit originates from *TransactionLevel5Service* (inner transaction)
+    Inspect the call stack on the second hit to confirm that the inner
+    transaction (`Propagation.REQUIRES_NEW`) is waiting for a lock held by
+    the outer one.
+
+
+3.  Open **TransactionLevel5Service** and remove the custom propagation:
+        • Delete  `propagation = Propagation.REQUIRES_NEW`
+        • Keep the default `@Transactional` only.
+        • Restart the application
+
+4.  Open **TransactionLevel3Service**:
+        • Make sure it injects correct TransactionLevel4Service.
+        • Set a breakpoint at `TransactionLevel1Service#processTransactionLevel3(...)`
+        • Restrict the mock service to the *test* profile.
+        • Restart the application
+
+5.  Restart the application.  
+    Click the button again – the request now returns, but the second click fails with “duplicate username”.
+
+6.  During debugging you will notice that the flag  
+    `useRandomNames` is *false*.  
+    Locate **user.random.names** in the property files and set it to `true`
+    for the active profile (e.g. in *application-demo.properties*).
+
+7.  Restart once more. Press **Add Random Customer** a few times:  
+    • The page returns immediately.  
+    • Each click inserts one customer.  
+    • Names are different every time.
+
+--------------------------------------------------------------------------------
+YOU’RE DONE 🎉
