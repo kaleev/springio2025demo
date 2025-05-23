@@ -40,7 +40,7 @@ Follow the steps below to verify and remove each defect.
 ### Step 3: Verify Correct Service Injection
 1. Open **TransactionLevel3Service**:
    - Ensure it injects the correct `TransactionLevel4Service`.
-   - Set a breakpoint at `TransactionLevel1Service#processTransactionLevel3(...)`.
+   - Set a breakpoint at `TransactionLevel3Service#processTransactionLevel3(...)`.
    - Restrict the mock service to the *test* profile only.
 2. Restart the application.
 
